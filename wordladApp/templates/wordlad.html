@@ -1,0 +1,320 @@
+{% block content %}
+{% load static %}
+
+
+<head>
+    <link rel="stylesheet" type="text/css" href="../static/wordlad.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+
+<script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+
+<div class="super_container">
+	<div class="backbar">
+		
+	</div>
+
+    <div class="wordlad-container">
+        <div class="wordlad-board">
+            <div class="wordlad-header">
+                <div id="refresh-container">
+                    <button id="refresh-button"><i class="fa-solid fa-arrows-rotate"></i></button>
+                </div>
+                <div id="info-container">
+                    <button id="info-button"><i class="fa-solid fa-circle-info"></i></button> 
+                </div>
+                <div class="wordlad-title">WordLad</div>
+                <div class="center-placeholder"></div>
+            </div>
+            
+            <div class="optimal-turns">
+                Can be done in {{optimal_turns}} turns.
+            </div>
+
+            <div class="wordlad-number-container">
+                <label id="changeWordlabLabel" for="wordladNumber">WordLad #: </label>
+                <button class="num-button" id="decreaseNumberButton" onclick="changeNumber(-1)"><i class="fa-solid fa-chevron-down"></i></button>
+                <input type="number" id="wordladNumber" min="1" max="{{ total_wordlads }}" value="{{ wordlad_index }}" readonly>
+                <button class="num-button" id="increaseNumberButton" onclick="changeNumber(1)"><i class="fa-solid fa-chevron-up"></i></button>
+                <button id="changeWordLadButton">Choose</button>
+            </div>
+
+            <div class="start-end-word" id="start-word">
+                {{start_word|upper}}
+            </div>
+
+            <div class="ladder">
+                
+            </div>
+
+            <div class="word-input">
+                <input type="text" maxlength={{ start_word|length }} id="userWordInput" class="word-input-box" readonly>
+            </div>
+
+            <div class="start-end-word" id="end-word">
+                {{end_word|upper}}
+            </div>
+
+            <div id="errors"></div>
+            <div id="win"></div>
+
+            <div>
+                <button id="resetButton">Reset</button>
+            </div>
+        </div>
+
+        <div class="keyboard">
+            <div class="top-keys keyboard-row">
+                {% for key in keyboard_top %}
+                    <button data-letter={{key|upper}} class="key">{{key|upper}}</button>
+                {% endfor %}
+            </div>
+            <div class="mid-keys keyboard-row">
+                {% for key in keyboard_mid %}
+                    <button data-letter={{key|upper}} class="key">{{key|upper}}</button>
+                {% endfor %}
+            </div>
+            <div class="bot-keys keyboard-row">
+                {% for key in keyboard_bot %}
+                    <button data-letter={{key|upper}} class="key">{{key|upper}}</button>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="infoModal">
+        <div class="modal-content">
+            <span class="close" id="closeModal">&times;</span>
+            <h4 class="rules-title text-center">WordLad Game Rules:</h4>
+            <h6 class="rules-subtitle">Objective:</h6>
+            <div class="objective">Create a word ladder from the start word to the end word by changing one letter at a time.</div>
+            <h6 class="rules-subtitle">How to Play:</h6>
+            <ol class="rules-list">
+                <li>Start with the given word.</li>
+                <li>Input a valid English word with one letter changed.</li>
+                <li>Win by connecting to the end word.</li>
+            </ol>
+            <div class="enjoy text-center">Enjoy playing WordLad!</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Function to handle key press events
+    function handleKeyPress(key) {
+        const virtualKey = $('.key[data-letter="' + key.toUpperCase() + '"]');
+        if (virtualKey.length > 0) {
+            virtualKey.click(); // Simulate button click
+        }
+    }
+
+    function isValidWord(userWord) {
+        return new Promise(function(resolve, reject) {
+            if (userWord) {
+                $.ajax({
+                    type: 'GET',
+                    url: `/word_exists/${userWord}/`,
+                    success: function(result) {
+                        resolve(result.exists);
+                    },
+                    error: function(error) {
+                        console.error('Error checking word:', error);
+                        reject('Error checking word.');
+                    }
+                });
+            } else {
+                displayError('Please enter a word');
+                reject('Please enter a word.');
+            }
+        });
+    }
+
+    function isOneLetterDifference(word1, word2) {
+        if (word1.length !== word2.length) {
+            return false;
+        }
+        let diffCount = 0;
+        for (let i = 0; i < word1.length; i++) {
+            if (word1[i] !== word2[i]) {
+                diffCount++;
+            }
+            if (diffCount > 1) {
+                return false;
+            }
+        }
+        return diffCount === 1;
+    }
+
+    function isLastWordOneLetterDifference(userWord) {
+        const ladder = $('.ladder');
+        let lastWord = ladder.children().last().text().trim();
+        if (!lastWord) {
+            lastWord = $('#start-word').text().trim();
+        }
+
+        return isOneLetterDifference(lastWord, userWord);
+    }
+
+    function addToLadder(userWord) {
+        const ladder = $('.ladder');
+        ladder.append(`<div>${userWord}</div>`);
+        $('#userWordInput').val('');
+    }
+
+    function moveLastWordFromLadderToInput() {
+        const ladder = $('.ladder');
+        const lastWord = ladder.children().last().text().trim();
+        if (lastWord) {
+            ladder.children().last().remove();
+            $('#userWordInput').val(lastWord);
+        }
+    }
+
+    function displayError(message) {
+        const errorDiv = $('#errors');
+        errorDiv.text(message);
+        errorDiv.show();
+    
+        setTimeout(function() {
+            errorDiv.text('');
+            errorDiv.hide();
+        }, 2000);
+    }
+
+    function displayWin(message) {
+        const winDiv = $('#win');
+        winDiv.text(message);
+        winDiv.show();
+    }
+
+    function clearDisplays() {
+        const winDiv = $('#win');
+        winDiv.hide();
+        winDiv.text('');
+        const errorDiv = $('#errors');
+        errorDiv.hide();
+        errorDiv.text('');
+        $('.ladder').empty();
+        $('#userWordInput').val('');
+    }
+
+    function changeNumber(step) {
+        var numberInput = document.getElementById('wordladNumber');
+        var currentValue = parseInt(numberInput.value);
+        var newValue = currentValue + step;
+
+        if (newValue >= 1 && newValue <= {{ total_wordlads }}) {
+            numberInput.value = newValue;
+        }
+    }
+
+    $(document).ready(function () {
+        // Disable zoom on double-click for buttons
+        $('button').on('dblclick', function (e) {
+            e.preventDefault();
+        });
+        clearDisplays();
+        // Listen for key presses on the document
+        $(document).keypress(function (event) {
+            handleKeyPress(String.fromCharCode(event.which));
+        });
+
+        // Listen for Enter and Backspace keys
+        $(document).keydown(function (event) {
+            if (event.keyCode === 13 || event.keyCode === 8) {
+                const virtualKey = $('.key[data-letter="' + (event.keyCode === 13 ? 'ENTER' : 'DEL') + '"]');
+                virtualKey.click();
+            }
+        });
+        $('.key').click(function () {
+            const clickedLetter = $(this).data('letter');
+            const currentInput = $('#userWordInput').val();
+            const maxLength = parseInt($('#userWordInput').attr('maxlength'));
+            const ladder = $('.ladder');
+            const start_word = $('#start-word').text();
+            const end_word = $('#end-word').text().trim();
+
+            if (clickedLetter === 'DEL') {
+                const winDiv = $('#win');
+                winDiv.hide();
+                winDiv.text('');
+                // If the word input is empty
+                if (currentInput === '') {
+                    // Remove the last word from the ladder and set it as the value of the input
+                    moveLastWordFromLadderToInput();
+                } else {
+                    // If the input is not empty, just remove the last character
+                    $('#userWordInput').val(currentInput.slice(0, -1));
+                }
+            } else if (clickedLetter === 'ENTER') {
+                const userWord = $('#userWordInput').val().trim();
+                if (userWord && userWord.length === maxLength) {
+                    isValidWord(userWord)
+                        .then(function(exists) {
+                            if (exists) {
+                                if (isLastWordOneLetterDifference(userWord)){
+                                    if (userWord === end_word) {
+                                        displayWin("Congrats! You completed the word ladder in " + (ladder.children().length + 1) + " turns!");
+                                    } else {
+                                        addToLadder(userWord);
+                                    }
+                                } else {
+                                    displayError('Word must be one letter different from last');
+                                    console.log('Word is not one letter different from last word')
+                                }
+                            } else {
+                                displayError('Word not found');
+                                console.log('Word does not exist');
+                            }
+                        })
+                        .catch(function(errorMessage) {
+                            console.error(errorMessage);
+                        });
+                } else {
+                    displayError('Word not long enough');
+                }
+            } else {
+                if (currentInput.length < maxLength) {
+                    $('#userWordInput').val(currentInput + clickedLetter);
+                }
+            }
+        });
+
+        $('#resetButton').click(function () {
+            clearDisplays();
+        });
+
+        $('#refresh-button').click(function () {
+            location.href = `/`;
+        });
+
+        $('#info-button').click(function () {
+            // Display the modal when the info button is clicked
+            $('#infoModal').show();
+        });
+    
+        // Close the modal when the close button is clicked
+        $('#closeModal').click(function () {
+            $('#infoModal').hide();
+        });
+    
+        // Close the modal when clicking outside the modal content
+        $(window).click(function (event) {
+            if (event.target === $('#infoModal')[0]) {
+                $('#infoModal').hide();
+            }
+        });
+
+        $('#changeWordLadButton').click(function () {
+            const newWordLadNumber = $('#wordladNumber').val();
+            if (newWordLadNumber >= 1 && newWordLadNumber <= {{ total_wordlads }}) {
+                location.href = `/wordlad/${newWordLadNumber}/`;
+            } else {
+                alert('Invalid WordLad number. Please choose a number between 1 and {{ total_wordlads }}.');
+            }
+        });
+    });
+</script>
+
+{% endblock %}
